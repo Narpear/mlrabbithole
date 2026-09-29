@@ -1,0 +1,36 @@
+---
+title: "Welcome to the rabbit hole"
+description: "A note on learning machine learning slowly, carefully, and without skipping the steps that matter."
+date: 2026-09-29
+series: "Start here"
+order: 0
+tags: ["welcome", "diffusion"]
+draft: false
+---
+
+import Callout from '../../components/Callout.astro';
+import NoiseSlider from '../../components/NoiseSlider.astro';
+
+## No “it’s easy to see that”
+
+Machine learning has a way of hiding its hardest steps inside a sentence: *it’s easy to see that…* This is a place to slow down. We’ll start with a question, define every symbol, and follow each step until the answer feels earned.
+
+The goal is not just to collect intuitions. It’s to know where they came from, when they apply, and what changes when an assumption does.
+
+## A taste: adding noise
+
+Here’s one small idea from diffusion models. We start with an image $x_0$, combine it with Gaussian noise $\epsilon$, and control the mix with a timestep $t$:
+
+$$
+x_t = \sqrt{\bar{\alpha}_t}\,x_0 + \sqrt{1 - \bar{\alpha}_t}\,\epsilon, \qquad \epsilon \sim \mathcal{N}(0, I).
+$$
+
+Move the slider. At the beginning, the image signal is all there is. As $t$ grows, the noise takes over.
+
+<NoiseSlider />
+
+<Callout type="warn" title="A variance detail worth keeping">
+The second argument of $\mathcal{N}(\mu, \Sigma)$ is the variance, not the standard deviation. That is why the noise is multiplied by $\sqrt{1 - \bar{\alpha}_t}$.
+</Callout>
+
+That square root is a small symbol with a big job: it turns a variance into the standard deviation that scales the sampled noise. We’ll keep following details like this, one question at a time.

@@ -1,0 +1,49 @@
+---
+title: "VAEs, part 1: why encode an image into a cloud?"
+description: "Why a variational autoencoder maps an image to a distribution instead of a single latent point."
+date: 2026-10-06
+series: "Generative models"
+order: 1
+tags: ["vae", "generative models"]
+draft: true
+---
+
+import Callout from '../../components/Callout.astro';
+
+## 1. The goal: generate new images
+
+- Start from the task: make plausible handwritten digits we have never seen before.
+- A model that only copies its input is not yet a generator.
+
+## 2. Plain autoencoders
+
+- An encoder maps an input image to a point $z$; a decoder maps $z$ back to an output image.
+- Use a two-dimensional latent space so we can draw and inspect it.
+- Keep handwritten digits as the running example.
+
+## 3. The problem: holes in latent space
+
+- Training points occupy only some regions of the latent space.
+- A decoder can reconstruct training examples yet produce nonsense from a point in a hole.
+- Reconstruction alone does not tell us which points are safe to sample.
+
+## 4. The fix: encode to a cloud, not a dot
+
+- The encoder outputs $\mu$ and $\sigma$, the parameters of a Gaussian distribution.
+- Sample a latent point from that Gaussian, then decode it.
+- Each sample from the same image's cloud must decode to the same image.
+
+<Callout title="Keep the path straight">
+Input image goes into the encoder. Output image comes out of the decoder. Training compares the two.
+</Callout>
+
+## 5. Keeping the clouds near the origin
+
+- A KL term pulls each cloud toward $\mathcal{N}(0, I)$.
+- This regularizes the latent space so nearby points remain useful for generation.
+- Generation becomes: sample $z \sim \mathcal{N}(0, I)$ and decode.
+
+## 6. Recap + what's next
+
+- A VAE trades a single latent point for a distribution we can sample.
+- The next post: the ELBO and the reparameterization trick.

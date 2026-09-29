@@ -1,0 +1,22 @@
+{
+  "name": "ml-rabbit-hole",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/markdown-remark": "latest",
+    "@astrojs/mdx": "latest",
+    "@astrojs/rss": "latest",
+    "@astrojs/sitemap": "latest",
+    "astro": "latest",
+    "katex": "latest",
+    "rehype-katex": "latest",
+    "remark-math": "latest"
+  }
+}

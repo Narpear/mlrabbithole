@@ -1,0 +1,53 @@
+---
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import Comments from '../../components/Comments.astro';
+import { formatDate, readingTime, type Post } from '../../lib/posts';
+
+export async function getStaticPaths() {
+  const posts = await getCollection('posts', ({ data }) => !import.meta.env.PROD || !data.draft);
+  return posts.map((post) => ({ params: { slug: post.id.replace(/\.(md|mdx)$/, '') }, props: { post } }));
+}
+
+interface Props {
+  post: Post;
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+const seriesPosts = (await getCollection('posts', ({ data }) => data.series === post.data.series && (!import.meta.env.PROD || !data.draft)))
+  .sort((a, b) => a.data.order - b.data.order);
+const index = seriesPosts.findIndex((item) => item.id === post.id);
+const previous = seriesPosts[index - 1];
+const next = seriesPosts[index + 1];
+const part = post.data.order > 0 ? `Part ${post.data.order}` : undefined;
+---
+
+<Base title={post.data.title} description={post.data.description}>
+  <div class="post-shell">
+    <article>
+      <header class="post-header">
+        <a class="series-badge" href="/">{post.data.series}{part && <span> · {part}</span>}</a>
+        <h1>{post.data.title}</h1>
+        <p class="post-meta"><time datetime={post.data.date.toISOString()}>{formatDate(post.data.date)}</time><span aria-hidden="true">·</span><span>{readingTime(post.body)} min read</span></p>
+      </header>
+      <div class="prose post-content"><Content /></div>
+    </article>
+
+    {(previous || next) && (
+      <nav class="post-navigation" aria-label="More in this series">
+        {previous ? (
+          <a class="post-navigation__card" href={`/posts/${previous.id.replace(/\.(md|mdx)$/, '')}/`}>
+            <span>← Previous</span><strong>{previous.data.title}</strong>
+          </a>
+        ) : <span></span>}
+        {next ? (
+          <a class="post-navigation__card post-navigation__card--next" href={`/posts/${next.id.replace(/\.(md|mdx)$/, '')}/`}>
+            <span>Next →</span><strong>{next.data.title}</strong>
+          </a>
+        ) : <span></span>}
+      </nav>
+    )}
+    <Comments />
+  </div>
+</Base>

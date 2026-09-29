@@ -1,0 +1,40 @@
+---
+import Base from '../layouts/Base.astro';
+import { getSeries } from '../lib/posts';
+import { SITE } from '../site.config';
+
+const series = await getSeries(import.meta.env.DEV);
+---
+
+<Base title={SITE.title}>
+  <div class="home-shell">
+    <section class="home-intro" aria-labelledby="home-title">
+      <p class="eyebrow">A field guide to machine learning</p>
+      <h1 id="home-title">{SITE.title}<span class="home-intro__period">.</span></h1>
+      <p class="home-intro__tagline">{SITE.tagline}</p>
+    </section>
+
+    <div class="series-list">
+      {[...series.entries()].map(([name, posts]) => (
+        <section class="series" aria-labelledby={`series-${name.replace(/\W+/g, '-').toLowerCase()}`}>
+          <h2 class="series__label" id={`series-${name.replace(/\W+/g, '-').toLowerCase()}`}>{name}</h2>
+          <ol class="post-list">
+            {posts.map((post) => (
+              <li class="post-row">
+                <span class="post-row__number">{String(post.data.order).padStart(2, '0')}</span>
+                <div class="post-row__content">
+                  <div class="post-row__heading">
+                    <a href={`/posts/${post.id.replace(/\.(md|mdx)$/, '')}/`}>{post.data.title}</a>
+                    {post.data.draft && <span class="draft-badge">Draft</span>}
+                  </div>
+                  <p>{post.data.description}</p>
+                  <time datetime={post.data.date.toISOString()}>{post.data.date.toLocaleDateString('en', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}</time>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+      ))}
+    </div>
+  </div>
+</Base>

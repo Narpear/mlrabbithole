@@ -1,0 +1,185 @@
+---
+const id = `noise-${crypto.randomUUID()}`;
+---
+
+<figure class="noise-demo" data-noise-slider>
+  <div class="noise-demo__canvases">
+    <div class="noise-demo__sample">
+      <canvas class="noise-demo__canvas" data-clean width="160" height="160" aria-label="Clean 16 by 16 smiley image"></canvas>
+      <span>x<sub>0</sub></span>
+    </div>
+    <span class="noise-demo__arrow" aria-hidden="true">→</span>
+    <div class="noise-demo__sample">
+      <canvas class="noise-demo__canvas" data-noisy width="160" height="160" aria-label="Noisy image at the selected diffusion timestep"></canvas>
+      <span>x<sub>t</sub></span>
+    </div>
+  </div>
+  <label class="noise-demo__control" for={id}>
+    <span class="noise-demo__control-label">Diffusion timestep <output data-timestep for={id}>0</output></span>
+    <input id={id} data-slider type="range" min="0" max="1000" step="1" value="0" />
+  </label>
+  <p class="noise-demo__readout" data-readout aria-live="polite"></p>
+</figure>
+
+<script>
+  const SIZE = 16;
+  const TOTAL_STEPS = 1000;
+  const OFFSET = 0.008;
+
+  function makeSmiley() {
+    const pixels = new Float32Array(SIZE * SIZE).fill(-0.92);
+    const setPixel = (x: number, y: number, value: number) => {
+      if (x >= 0 && x < SIZE && y >= 0 && y < SIZE) pixels[y * SIZE + x] = value;
+    };
+
+    for (let y = 1; y < 15; y++) {
+      for (let x = 1; x < 15; x++) {
+        if ((x - 7.5) ** 2 + (y - 7.5) ** 2 <= 45) setPixel(x, y, 0.78);
+      }
+    }
+
+    for (const [x, y] of [[5, 5], [10, 5], [4, 6], [11, 6]]) setPixel(x, y, -0.85);
+    for (const [x, y] of [[5, 10], [6, 11], [7, 12], [8, 12], [9, 11], [10, 10]]) setPixel(x, y, -0.85);
+    return pixels;
+  }
+
+  function makeNoise() {
+    const values = new Float32Array(SIZE * SIZE);
+    for (let index = 0; index < values.length; index += 2) {
+      const first = Math.max(Number.EPSILON, Math.random());
+      const second = Math.random();
+      const radius = Math.sqrt(-2 * Math.log(first));
+      values[index] = radius * Math.cos(2 * Math.PI * second);
+      if (index + 1 < values.length) values[index + 1] = radius * Math.sin(2 * Math.PI * second);
+    }
+    return values;
+  }
+
+  function schedule(timestep: number) {
+    const fraction = timestep / TOTAL_STEPS;
+    const cosine = Math.cos(((fraction + OFFSET) / (1 + OFFSET)) * Math.PI / 2);
+    const initialCosine = Math.cos((OFFSET / (1 + OFFSET)) * Math.PI / 2);
+    return (cosine * cosine) / (initialCosine * initialCosine);
+  }
+
+  function draw(canvas: HTMLCanvasElement, pixels: Float32Array) {
+    const context = canvas.getContext('2d');
+    if (!context) return;
+    const image = context.createImageData(SIZE, SIZE);
+    for (let index = 0; index < pixels.length; index++) {
+      const shade = Math.round((Math.max(-1, Math.min(1, pixels[index])) + 1) * 127.5);
+      const offset = index * 4;
+      image.data[offset] = shade;
+      image.data[offset + 1] = shade;
+      image.data[offset + 2] = shade;
+      image.data[offset + 3] = 255;
+    }
+    const buffer = document.createElement('canvas');
+    buffer.width = SIZE;
+    buffer.height = SIZE;
+    buffer.getContext('2d')?.putImageData(image, 0, 0);
+    context.imageSmoothingEnabled = false;
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(buffer, 0, 0, canvas.width, canvas.height);
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-noise-slider]').forEach((demo) => {
+    const cleanCanvas = demo.querySelector<HTMLCanvasElement>('[data-clean]');
+    const noisyCanvas = demo.querySelector<HTMLCanvasElement>('[data-noisy]');
+    const slider = demo.querySelector<HTMLInputElement>('[data-slider]');
+    const timestepOutput = demo.querySelector<HTMLOutputElement>('[data-timestep]');
+    const readout = demo.querySelector<HTMLElement>('[data-readout]');
+    if (!cleanCanvas || !noisyCanvas || !slider || !timestepOutput || !readout) return;
+
+    const clean = makeSmiley();
+    const noise = makeNoise();
+    draw(cleanCanvas, clean);
+
+    const update = () => {
+      const timestep = Number(slider.value);
+      const alpha = schedule(timestep);
+      const signalScale = Math.sqrt(alpha);
+      const noiseScale = Math.sqrt(1 - alpha);
+      const noisy = clean.map((value, index) => signalScale * value + noiseScale * noise[index]);
+      draw(noisyCanvas, noisy);
+      timestepOutput.value = String(timestep);
+      readout.textContent = `ᾱ_t = ${alpha.toFixed(3)} → keeps ${Math.round(signalScale * 100)}% of the image signal, noise std ${noiseScale.toFixed(2)}`;
+    };
+
+    slider.addEventListener('input', update);
+    update();
+  });
+</script>
+
+<style>
+  .noise-demo {
+    margin: 2rem 0;
+    padding: 1.2rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface);
+  }
+
+  .noise-demo__canvases {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(0.75rem, 5vw, 2rem);
+  }
+
+  .noise-demo__sample {
+    display: grid;
+    justify-items: center;
+    gap: 0.45rem;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+  }
+
+  .noise-demo__canvas {
+    display: block;
+    width: min(160px, 32vw);
+    height: auto;
+    aspect-ratio: 1;
+    image-rendering: pixelated;
+    background: #161b19;
+  }
+
+  .noise-demo__arrow {
+    color: var(--accent);
+    font-family: var(--font-ui);
+    font-size: 1.35rem;
+  }
+
+  .noise-demo__control {
+    display: grid;
+    gap: 0.55rem;
+    margin-top: 1.15rem;
+    color: var(--ink);
+    font-family: var(--font-ui);
+    font-size: 0.84rem;
+  }
+
+  .noise-demo__control-label {
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .noise-demo__control output,
+  .noise-demo__readout {
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .noise-demo input[type='range'] {
+    width: 100%;
+    accent-color: var(--accent);
+  }
+
+  .noise-demo__readout {
+    margin: 0.7rem 0 0;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+</style>
