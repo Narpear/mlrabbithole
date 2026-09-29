@@ -180,7 +180,7 @@ a {
 .home-shell,
 .post-shell,
 .about-page {
-  width: min(100% - 2rem, 42rem);
+  width: min(100% - 2rem, 46rem);
   margin-inline: auto;
 }
 
@@ -539,7 +539,7 @@ a {
   .home-shell,
   .post-shell,
   .about-page {
-    width: min(100% - 1.5rem, 42rem);
+    width: min(100% - 1.5rem, 46rem);
   }
 
   .home-intro {
