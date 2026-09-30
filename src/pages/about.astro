@@ -9,6 +9,29 @@ import { SITE } from '../site.config';
     <h1>Hi, I’m Prerana.</h1>
     <p>I’m an MCDS student at Carnegie Mellon, previously an AI engineer working on multimodal document processing and generative design.</p>
     <p>This blog is where I work through machine learning one question at a time, with every symbol defined and every step shown. No “it’s easy to see that” left unexplained.</p>
+    <nav class="about-links" aria-label="Find me online">
+      <a href="https://github.com/Narpear" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href="https://www.linkedin.com/in/preranakulkarni5/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+      <a href="https://scholar.google.com/citations?hl=en&user=Qq129b0AAAAJ" target="_blank" rel="noopener noreferrer">Google Scholar</a>
+    </nav>
     <p class="about-page__signoff">{SITE.title} is a notebook for following an idea all the way down.</p>
   </article>
 </Base>
+
+<style>
+  .about-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.25rem;
+    margin: 1.75rem 0;
+    font-family: var(--font-ui);
+    font-size: 0.86rem;
+    font-weight: 600;
+  }
+
+  .about-links a {
+    color: var(--accent);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+  }
+</style>

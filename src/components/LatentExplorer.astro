@@ -1,0 +1,249 @@
+---
+interface Props {
+  mode?: 'ae' | 'vae';
+}
+
+const { mode = 'vae' } = Astro.props;
+---
+
+<figure class="latent-demo" data-latent-explorer data-mode={mode}>
+  <div class="latent-demo__toolbar">
+    <div class="latent-demo__toggle" role="group" aria-label="Latent model">
+      <button type="button" data-mode-button="ae" aria-pressed={mode === 'ae'}>Autoencoder</button>
+      <button type="button" data-mode-button="vae" aria-pressed={mode === 'vae'}>VAE</button>
+    </div>
+    <button class="latent-demo__button" type="button" data-random>Random z ~ N(0, I)</button>
+  </div>
+  <div class="latent-demo__layout">
+    <div class="latent-demo__plot-wrap">
+      <canvas class="latent-demo__plot" data-plot width="360" height="360" aria-label="Interactive two-dimensional latent space with digit prototypes"></canvas>
+      <span class="latent-demo__axis latent-demo__axis--x">z₁</span>
+      <span class="latent-demo__axis latent-demo__axis--y">z₂</span>
+    </div>
+    <div class="latent-demo__output-wrap">
+      <span class="latent-demo__output-label">Decoded output image</span>
+      <canvas class="latent-demo__output" data-output width="12" height="12" aria-label="Toy decoded output image made from handwritten digit prototypes"></canvas>
+    </div>
+  </div>
+  <p class="latent-demo__readout" data-readout aria-live="polite"></p>
+  <figcaption>Move or click in the plot, then try Random z. Toy simulation, not a trained model.</figcaption>
+</figure>
+
+<script>
+  const digits = [
+    { label: '0', x: -1.35, y: 0.75, rows: ['000011110000', '000110011000', '001100001100', '001100001100', '011000000110', '011000000110', '011000000110', '011000000110', '001100001100', '001100001100', '000110011000', '000011110000'] },
+    { label: '1', x: 0.1, y: 0.1, rows: ['000001100000', '000011100000', '000111100000', '001101100000', '000001100000', '000001100000', '000001100000', '000001100000', '000001100000', '000001100000', '000001100000', '000111111000'] },
+    { label: '7', x: 1.35, y: 0.85, rows: ['011111111110', '011111111110', '000000001100', '000000011000', '000000110000', '000001100000', '000001100000', '000011000000', '000011000000', '000110000000', '000110000000', '000110000000'] },
+    { label: '4', x: -0.65, y: -1.35, rows: ['000000110000', '000001110000', '000011110000', '000110110000', '001100110000', '011000110000', '011111111110', '000000110000', '000000110000', '000000110000', '000000110000', '000000110000'] },
+  ];
+
+  function sampleNormal() {
+    const radius = Math.sqrt(-2 * Math.log(Math.max(Number.EPSILON, Math.random())));
+    const angle = Math.random() * Math.PI * 2;
+    return [radius * Math.cos(angle), radius * Math.sin(angle)];
+  }
+
+  function themeColor(name: string, fallback: string) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-latent-explorer]').forEach((demo) => {
+    const plot = demo.querySelector<HTMLCanvasElement>('[data-plot]');
+    const output = demo.querySelector<HTMLCanvasElement>('[data-output]');
+    const readout = demo.querySelector<HTMLElement>('[data-readout]');
+    const randomButton = demo.querySelector<HTMLButtonElement>('[data-random]');
+    const modeButtons = demo.querySelectorAll<HTMLButtonElement>('[data-mode-button]');
+    if (!plot || !output || !readout || !randomButton) return;
+    const context = plot.getContext('2d');
+    const outputContext = output.getContext('2d');
+    if (!context || !outputContext) return;
+
+    let mode = demo.dataset.mode === 'ae' ? 'ae' : 'vae';
+    let point: [number, number] = [0.05, 0.1];
+    let dragging = false;
+    const toCanvas = (x: number, y: number) => [(x + 3) * 60, (3 - y) * 60];
+
+    const update = () => {
+      const ink = themeColor('--ink', '#202a26');
+      const muted = themeColor('--muted', '#69756f');
+      const line = themeColor('--line', '#dfe5df');
+      const accent = themeColor('--accent', '#0f6e56');
+      const surface = themeColor('--surface', '#ffffff');
+      const spread = mode === 'ae' ? 0.32 : 1.25;
+      const weights = digits.map((digit) => Math.exp(-((point[0] - digit.x) ** 2 + (point[1] - digit.y) ** 2) / (2 * spread ** 2)));
+      const total = weights.reduce((sum, weight) => sum + weight, 0);
+      const nearestIndex = weights.indexOf(Math.max(...weights));
+      const blendWeight = total / (total + 0.2);
+
+      context.clearRect(0, 0, plot.width, plot.height);
+      context.fillStyle = surface;
+      context.fillRect(0, 0, plot.width, plot.height);
+      context.strokeStyle = line;
+      context.lineWidth = 1;
+      for (let tick = 0; tick <= 6; tick++) {
+        const position = tick * 60;
+        context.beginPath();
+        context.moveTo(position, 0);
+        context.lineTo(position, 360);
+        context.moveTo(0, position);
+        context.lineTo(360, position);
+        context.stroke();
+      }
+      digits.forEach((digit) => {
+        const [x, y] = toCanvas(digit.x, digit.y);
+        if (mode === 'vae') {
+          context.beginPath();
+          context.arc(x, y, spread * 60 * 1.5, 0, Math.PI * 2);
+          context.globalAlpha = 0.12;
+          context.fillStyle = accent;
+          context.fill();
+          context.globalAlpha = 1;
+        }
+        context.beginPath();
+        context.arc(x, y, mode === 'ae' ? 5 : 4, 0, Math.PI * 2);
+        context.fillStyle = accent;
+        context.fill();
+        context.fillStyle = muted;
+        context.font = '12px monospace';
+        context.fillText(digit.label, x + 8, y - 7);
+      });
+      const [markerX, markerY] = toCanvas(point[0], point[1]);
+      context.beginPath();
+      context.arc(markerX, markerY, 7, 0, Math.PI * 2);
+      context.strokeStyle = ink;
+      context.lineWidth = 2;
+      context.stroke();
+      context.beginPath();
+      context.moveTo(markerX - 11, markerY);
+      context.lineTo(markerX + 11, markerY);
+      context.moveTo(markerX, markerY - 11);
+      context.lineTo(markerX, markerY + 11);
+      context.stroke();
+
+      const pixels = outputContext.createImageData(12, 12);
+      const denominator = Math.max(total, 0.0001);
+      for (let y = 0; y < 12; y++) {
+        for (let x = 0; x < 12; x++) {
+          const offset = (y * 12 + x) * 4;
+          let intensity = 0;
+          if (mode === 'ae' && total < 0.025) {
+            const smear = Math.sin((x + 1) * 17 + (y + 3) * 9) * 0.08;
+            intensity = 0.43 + smear;
+          } else {
+            for (let index = 0; index < digits.length; index++) {
+              intensity += (Number(digits[index].rows[y][x]) * weights[index]) / denominator;
+            }
+            if (mode === 'vae') intensity = 0.88 * intensity + 0.06;
+          }
+          const color = intensity > 0.48 ? accent : surface;
+          const parsed = color.startsWith('#') ? color.slice(1) : '';
+          const red = parsed.length === 6 ? Number.parseInt(parsed.slice(0, 2), 16) : (intensity > 0.48 ? 15 : 255);
+          const green = parsed.length === 6 ? Number.parseInt(parsed.slice(2, 4), 16) : (intensity > 0.48 ? 110 : 255);
+          const blue = parsed.length === 6 ? Number.parseInt(parsed.slice(4, 6), 16) : (intensity > 0.48 ? 86 : 255);
+          pixels.data[offset] = red;
+          pixels.data[offset + 1] = green;
+          pixels.data[offset + 2] = blue;
+          pixels.data[offset + 3] = 255;
+        }
+      }
+      outputContext.putImageData(pixels, 0, 0);
+      readout.textContent = `z = (${point[0].toFixed(2)}, ${point[1].toFixed(2)}) · nearest: ${digits[nearestIndex].label} · blend weight ${blendWeight.toFixed(2)}`;
+      modeButtons.forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.modeButton === mode)));
+    };
+
+    const setPointFromEvent = (event: PointerEvent) => {
+      const rect = plot.getBoundingClientRect();
+      const localX = (event.clientX - rect.left) / rect.width * plot.width;
+      const localY = (event.clientY - rect.top) / rect.height * plot.height;
+      point = [Math.max(-3, Math.min(3, localX / 60 - 3)), Math.max(-3, Math.min(3, 3 - localY / 60))];
+      update();
+    };
+
+    plot.addEventListener('pointerdown', (event) => {
+      dragging = true;
+      plot.setPointerCapture(event.pointerId);
+      setPointFromEvent(event);
+    });
+    plot.addEventListener('pointermove', (event) => {
+      if (dragging || event.pointerType === 'mouse') setPointFromEvent(event);
+    });
+    plot.addEventListener('pointerup', () => { dragging = false; });
+    plot.addEventListener('pointercancel', () => { dragging = false; });
+    modeButtons.forEach((button) => button.addEventListener('click', () => {
+      mode = button.dataset.modeButton === 'ae' ? 'ae' : 'vae';
+      demo.dataset.mode = mode;
+      update();
+    }));
+    randomButton.addEventListener('click', () => {
+      point = sampleNormal();
+      update();
+    });
+    new MutationObserver(update).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    update();
+  });
+</script>
+
+<style>
+  .latent-demo {
+    margin: 2rem 0;
+    padding: 1.2rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface);
+  }
+
+  .latent-demo__toolbar,
+  .latent-demo__toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+
+  .latent-demo__toolbar { justify-content: space-between; flex-wrap: wrap; }
+  .latent-demo__toggle { padding: 3px; border: 1px solid var(--line); border-radius: 5px; }
+  .latent-demo button {
+    min-height: 2.1rem;
+    padding: 0.35rem 0.65rem;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--ink);
+    font: 500 0.78rem var(--font-ui);
+    cursor: pointer;
+  }
+  .latent-demo button[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent); }
+  .latent-demo .latent-demo__button { border-color: var(--line); background: var(--surface); }
+  .latent-demo button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .latent-demo__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(6rem, 0.34fr);
+    align-items: center;
+    gap: clamp(0.8rem, 4vw, 1.5rem);
+    margin-top: 1rem;
+  }
+  .latent-demo__plot-wrap { position: relative; min-width: 0; }
+  .latent-demo__plot {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    touch-action: none;
+    cursor: crosshair;
+  }
+  .latent-demo__axis { position: absolute; color: var(--muted); font: 0.68rem var(--font-mono); pointer-events: none; }
+  .latent-demo__axis--x { right: 0.45rem; bottom: 0.2rem; }
+  .latent-demo__axis--y { top: 0.25rem; left: 0.35rem; }
+  .latent-demo__output-wrap { display: grid; justify-items: center; gap: 0.55rem; min-width: 0; }
+  .latent-demo__output-label { color: var(--muted); font: 0.7rem var(--font-ui); text-align: center; }
+  .latent-demo__output { display: block; width: min(100%, 132px); height: auto; aspect-ratio: 1; image-rendering: pixelated; border: 1px solid var(--line); }
+  .latent-demo__readout,
+  .latent-demo figcaption { margin: 0.7rem 0 0; color: var(--muted); font: 0.73rem/1.6 var(--font-mono); font-variant-numeric: tabular-nums; }
+  .latent-demo figcaption { font-family: var(--font-ui); }
+  @media (max-width: 480px) {
+    .latent-demo { padding: 0.8rem; }
+    .latent-demo__layout { grid-template-columns: minmax(0, 1fr) 5.5rem; gap: 0.65rem; }
+    .latent-demo__output-label { font-size: 0.64rem; }
+    .latent-demo button { padding-inline: 0.45rem; font-size: 0.7rem; }
+  }
+</style>

@@ -1,0 +1,144 @@
+---
+const id = `cloud-${crypto.randomUUID()}`;
+---
+
+<figure class="cloud-demo" data-cloud-sampler>
+  <div class="cloud-demo__plot-wrap">
+    <canvas data-plot width="360" height="280" aria-label="Gaussian latent cloud with sampled latent points"></canvas>
+    <span class="cloud-demo__axis cloud-demo__axis--x">z₁</span>
+    <span class="cloud-demo__axis cloud-demo__axis--y">z₂</span>
+  </div>
+  <div class="cloud-demo__controls">
+    <label for={`${id}-mu1`}><span>μ₁ <output data-value="mu1">0.00</output></span><input id={`${id}-mu1`} data-slider="mu1" type="range" min="-2" max="2" step="0.01" value="0" /></label>
+    <label for={`${id}-mu2`}><span>μ₂ <output data-value="mu2">0.00</output></span><input id={`${id}-mu2`} data-slider="mu2" type="range" min="-2" max="2" step="0.01" value="0" /></label>
+    <label for={`${id}-sigma`}><span>σ <output data-value="sigma">0.60</output></span><input id={`${id}-sigma`} data-slider="sigma" type="range" min="0.05" max="1.5" step="0.01" value="0.6" /></label>
+  </div>
+  <div class="cloud-demo__buttons">
+    <button type="button" data-sample>Sample ε</button>
+    <button type="button" data-sample-many>Sample ×20</button>
+    <button type="button" data-clear>Clear</button>
+  </div>
+  <p class="cloud-demo__readout" data-readout aria-live="polite">ε = (—, —) → z = μ + σ·ε = (—, —)</p>
+  <figcaption>Try moving μ and σ, then sample. Randomness lives in ε; μ and σ are ordinary trainable numbers. Toy simulation, not a trained model.</figcaption>
+</figure>
+
+<script>
+  function normalPair() {
+    const first = Math.max(Number.EPSILON, Math.random());
+    const second = Math.random();
+    const radius = Math.sqrt(-2 * Math.log(first));
+    return [radius * Math.cos(2 * Math.PI * second), radius * Math.sin(2 * Math.PI * second)];
+  }
+
+  document.querySelectorAll<HTMLElement>('[data-cloud-sampler]').forEach((demo) => {
+    const plot = demo.querySelector<HTMLCanvasElement>('[data-plot]');
+    const readout = demo.querySelector<HTMLElement>('[data-readout]');
+    const mu1 = demo.querySelector<HTMLInputElement>('[data-slider="mu1"]');
+    const mu2 = demo.querySelector<HTMLInputElement>('[data-slider="mu2"]');
+    const sigma = demo.querySelector<HTMLInputElement>('[data-slider="sigma"]');
+    if (!plot || !readout || !mu1 || !mu2 || !sigma) return;
+    const context = plot.getContext('2d');
+    if (!context) return;
+    const samples: Array<[number, number]> = [];
+    let last: { epsilon: number[]; z: number[] } | undefined;
+    const color = (name: string, fallback: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+    const map = (x: number, y: number) => [30 + (x + 3) * 50, 20 + (3 - y) * 40];
+
+    const draw = () => {
+      const ink = color('--ink', '#202a26');
+      const muted = color('--muted', '#69756f');
+      const line = color('--line', '#dfe5df');
+      const accent = color('--accent', '#0f6e56');
+      const surface = color('--surface', '#ffffff');
+      const mean = [Number(mu1.value), Number(mu2.value)];
+      const spread = Number(sigma.value);
+      context.clearRect(0, 0, plot.width, plot.height);
+      context.fillStyle = surface;
+      context.fillRect(0, 0, plot.width, plot.height);
+      context.strokeStyle = line;
+      context.lineWidth = 1;
+      for (let tick = -3; tick <= 3; tick++) {
+        const [x] = map(tick, 0);
+        const [, y] = map(0, tick);
+        context.beginPath(); context.moveTo(x, 20); context.lineTo(x, 260); context.stroke();
+        context.beginPath(); context.moveTo(30, y); context.lineTo(330, y); context.stroke();
+      }
+      const [centerX, centerY] = map(mean[0], mean[1]);
+      context.save();
+      context.translate(centerX, centerY);
+      context.scale(spread * 50, spread * 40);
+      for (const radius of [2, 1]) {
+        context.beginPath(); context.arc(0, 0, radius, 0, Math.PI * 2);
+        context.setLineDash(radius === 2 ? [5, 4] : []);
+        context.strokeStyle = accent;
+        context.globalAlpha = radius === 2 ? 0.35 : 0.65;
+        context.lineWidth = 1;
+        context.stroke();
+      }
+      context.restore();
+      context.globalAlpha = 1;
+      samples.forEach(([x, y]) => {
+        const [pointX, pointY] = map(x, y);
+        context.beginPath(); context.arc(pointX, pointY, 3, 0, Math.PI * 2);
+        context.fillStyle = accent; context.fill();
+      });
+      context.beginPath(); context.moveTo(centerX - 8, centerY); context.lineTo(centerX + 8, centerY);
+      context.moveTo(centerX, centerY - 8); context.lineTo(centerX, centerY + 8);
+      context.strokeStyle = ink; context.lineWidth = 2; context.stroke();
+      context.fillStyle = muted; context.font = '11px monospace';
+      context.fillText('−3', 7, 25); context.fillText('3', 337, 255);
+      demo.querySelector('[data-value="mu1"]')!.textContent = mean[0].toFixed(2);
+      demo.querySelector('[data-value="mu2"]')!.textContent = mean[1].toFixed(2);
+      demo.querySelector('[data-value="sigma"]')!.textContent = spread.toFixed(2);
+    };
+
+    const sample = () => {
+      const epsilon = normalPair();
+      const spread = Number(sigma.value);
+      const z = [Number(mu1.value) + spread * epsilon[0], Number(mu2.value) + spread * epsilon[1]];
+      samples.push([Math.max(-3, Math.min(3, z[0])), Math.max(-3, Math.min(3, z[1]))]);
+      if (samples.length > 300) samples.shift();
+      last = { epsilon, z };
+    };
+    demo.querySelector('[data-sample]')?.addEventListener('click', () => {
+      sample();
+      readout.textContent = `ε = (${last!.epsilon[0].toFixed(2)}, ${last!.epsilon[1].toFixed(2)}) → z = μ + σ·ε = (${last!.z[0].toFixed(2)}, ${last!.z[1].toFixed(2)})`;
+      draw();
+    });
+    demo.querySelector('[data-sample-many]')?.addEventListener('click', () => {
+      for (let index = 0; index < 20; index++) sample();
+      readout.textContent = `ε = (${last!.epsilon[0].toFixed(2)}, ${last!.epsilon[1].toFixed(2)}) → z = μ + σ·ε = (${last!.z[0].toFixed(2)}, ${last!.z[1].toFixed(2)}) · 20 samples`;
+      draw();
+    });
+    demo.querySelector('[data-clear]')?.addEventListener('click', () => {
+      samples.length = 0;
+      last = undefined;
+      readout.textContent = 'ε = (—, —) → z = μ + σ·ε = (—, —)';
+      draw();
+    });
+    [mu1, mu2, sigma].forEach((slider) => slider.addEventListener('input', draw));
+    new MutationObserver(draw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    draw();
+  });
+</script>
+
+<style>
+  .cloud-demo { margin: 2rem 0; padding: 1.2rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+  .cloud-demo__plot-wrap { position: relative; min-width: 0; }
+  .cloud-demo canvas { display: block; width: 100%; height: auto; aspect-ratio: 9 / 7; border: 1px solid var(--line); border-radius: 3px; }
+  .cloud-demo__axis { position: absolute; color: var(--muted); font: 0.68rem var(--font-mono); pointer-events: none; }
+  .cloud-demo__axis--x { right: 0.45rem; bottom: 0.2rem; }
+  .cloud-demo__axis--y { top: 0.25rem; left: 0.35rem; }
+  .cloud-demo__controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 1rem; }
+  .cloud-demo__controls label { display: grid; gap: 0.5rem; color: var(--ink); font: 0.78rem var(--font-ui); }
+  .cloud-demo__controls label span { display: flex; justify-content: space-between; gap: 0.5rem; }
+  .cloud-demo output, .cloud-demo__readout { color: var(--muted); font: 0.73rem var(--font-mono); font-variant-numeric: tabular-nums; }
+  .cloud-demo input[type='range'] { width: 100%; accent-color: var(--accent); }
+  .cloud-demo__buttons { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 1rem; }
+  .cloud-demo button { min-height: 2.1rem; padding: 0.35rem 0.7rem; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); font: 500 0.78rem var(--font-ui); cursor: pointer; }
+  .cloud-demo button:hover { border-color: var(--accent); color: var(--accent); }
+  .cloud-demo button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .cloud-demo__readout, .cloud-demo figcaption { margin: 0.7rem 0 0; line-height: 1.6; overflow-wrap: anywhere; }
+  .cloud-demo figcaption { color: var(--muted); font: 0.78rem/1.6 var(--font-ui); }
+  @media (max-width: 480px) { .cloud-demo { padding: 0.8rem; } .cloud-demo__controls { gap: 0.65rem; } .cloud-demo__controls label { font-size: 0.7rem; } }
+</style>

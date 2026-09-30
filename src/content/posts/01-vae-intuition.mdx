@@ -9,41 +9,122 @@ draft: true
 ---
 
 import Callout from '../../components/Callout.astro';
+import LatentExplorer from '../../components/LatentExplorer.astro';
+import CloudSampler from '../../components/CloudSampler.astro';
+import KLTugOfWar from '../../components/KLTugOfWar.astro';
 
-## 1. The goal: generate new images
+## What does it mean to generate an OUTPUT image?
 
-- Start from the task: make plausible handwritten digits we have never seen before.
-- A model that only copies its input is not yet a generator.
+Suppose I ask you to generate a handwritten digit. I do not mean: find one of the training examples, paste it back, and hope nobody notices. I mean: produce a new OUTPUT image that looks like it could have come from the same world as the training examples. In probability language, the goal is to sample from a distribution of realistic handwritten digits.
 
-## 2. Plain autoencoders
+Memorizing the training set is useful for some tasks, but it is not the same thing. A lookup table can return an INPUT image it has already seen. It has no principled way to make a new variation, or even to decide what should happen between two stored examples. A generator needs a route from a manageable set of random choices to plausible OUTPUT images.
 
-- An encoder maps an input image to a point $z$; a decoder maps $z$ back to an output image.
-- Use a two-dimensional latent space so we can draw and inspect it.
-- Keep handwritten digits as the running example.
+That is the question I want to make concrete: what should those random choices look like, and how do we train a decoder to use them? I’ll keep the latent space two-dimensional. Real VAEs usually use many more coordinates, but two lets us draw the whole problem instead of waving at it.
 
-## 3. The problem: holes in latent space
+## First, a plain autoencoder
 
-- Training points occupy only some regions of the latent space.
-- A decoder can reconstruct training examples yet produce nonsense from a point in a hole.
-- Reconstruction alone does not tell us which points are safe to sample.
+A plain autoencoder has two jobs. The encoder takes an INPUT image of a handwritten digit and compresses it into one point, called $z$, in the latent space. The decoder takes that point and produces an OUTPUT image. During training, a reconstruction loss compares the OUTPUT image with the INPUT image that started the trip. The encoder and decoder weights are adjusted by backpropagation to make that comparison better.
 
-## 4. The fix: encode to a cloud, not a dot
+Here is the whole route. The small pixel patterns stand for the INPUT image and OUTPUT image, not for real handwritten examples.
 
-- The encoder outputs $\mu$ and $\sigma$, the parameters of a Gaussian distribution.
-- Sample a latent point from that Gaussian, then decode it.
-- Each sample from the same image's cloud must decode to the same image.
+<svg class="vae-pipeline" style="display:block;width:100%;height:auto;margin:1.5rem 0 2rem;color:var(--ink)" viewBox="0 0 760 176" role="img" aria-label="Pipeline from INPUT image through encoder, latent point z, and decoder to OUTPUT image, with reconstruction loss comparing the output to the input">
+	<defs>
+		<marker id="vae-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="currentColor" /></marker>
+	</defs>
+	<g fill="none" stroke="currentColor" stroke-width="2" marker-end="url(#vae-arrow)">
+		<path d="M92 57 H153" /><path d="M241 57 H294" /><path d="M366 57 H417" /><path d="M487 57 H540" /><path d="M624 57 H674" />
+		<path d="M705 83 C705 140 55 140 55 83" stroke-dasharray="5 5" />
+	</g>
+	<g fill="currentColor" font-family="var(--font-ui)" text-anchor="middle">
+		<text x="55" y="28" font-size="15" font-weight="600">INPUT image</text>
+		<text x="198" y="62" font-size="16">encoder</text>
+		<text x="330" y="62" font-size="18">z</text>
+		<text x="452" y="62" font-size="15">decoder</text>
+		<text x="582" y="28" font-size="15" font-weight="600">OUTPUT image</text>
+		<text x="380" y="158" font-size="14">reconstruction loss compares OUTPUT with INPUT</text>
+	</g>
+	<g fill="currentColor" opacity="0.78">
+		<rect x="33" y="39" width="7" height="7" /><rect x="40" y="39" width="7" height="7" /><rect x="47" y="39" width="7" height="7" /><rect x="54" y="39" width="7" height="7" /><rect x="61" y="39" width="7" height="7" />
+		<rect x="33" y="46" width="7" height="7" /><rect x="61" y="46" width="7" height="7" /><rect x="33" y="53" width="7" height="7" /><rect x="61" y="53" width="7" height="7" /><rect x="33" y="60" width="7" height="7" /><rect x="61" y="60" width="7" height="7" /><rect x="33" y="67" width="7" height="7" /><rect x="40" y="67" width="7" height="7" /><rect x="47" y="67" width="7" height="7" /><rect x="54" y="67" width="7" height="7" /><rect x="61" y="67" width="7" height="7" />
+		<rect x="684" y="39" width="7" height="7" /><rect x="691" y="39" width="7" height="7" /><rect x="698" y="39" width="7" height="7" /><rect x="705" y="39" width="7" height="7" /><rect x="712" y="39" width="7" height="7" />
+		<rect x="684" y="46" width="7" height="7" /><rect x="712" y="46" width="7" height="7" /><rect x="684" y="53" width="7" height="7" /><rect x="712" y="53" width="7" height="7" /><rect x="684" y="60" width="7" height="7" /><rect x="712" y="60" width="7" height="7" /><rect x="684" y="67" width="7" height="7" /><rect x="691" y="67" width="7" height="7" /><rect x="698" y="67" width="7" height="7" /><rect x="705" y="67" width="7" height="7" /><rect x="712" y="67" width="7" height="7" />
+	</g>
+</svg>
 
-<Callout title="Keep the path straight">
+For reconstruction, this arrangement can work nicely. A handwritten zero might land near another zero, while a one lands somewhere else. If the encoder keeps examples with similar strokes near one another, the decoder can learn to turn each occupied point into a convincing OUTPUT image. The trouble is that the training loss only asks about points the encoder actually visits.
+
+## The problem: holes
+
+Each INPUT image claims one dot in latent space. The dots may form a few islands, with large empty patches between them. The decoder has received no useful instruction about what those empty coordinates mean. Ask it for an OUTPUT image at a point in one of those holes, and it may return a mess: a stray stroke, a gray blur, or some combination that does not look like a handwritten digit.
+
+That is the gap between reconstruction and generation. Reconstruction asks, “Can the encoder put this INPUT image somewhere the decoder knows how to rebuild it?” Generation asks, “If I pick a point without consulting the encoder, will the decoder know what to do?” A plain autoencoder can be good at the first and have no answer to the second.
+
+Try moving the marker between the prototype dots. Switch the control between Autoencoder and VAE, then use Random z. In this toy, a narrow neighborhood around each dot makes the holes visible.
+
+<LatentExplorer mode="ae" />
+
+## Encode a cloud, not a dot
+
+A variational autoencoder changes the encoder’s answer. Instead of returning one point $z$, the encoder returns two numbers for each latent coordinate: a mean, written $\mu$, and a standard deviation, written $\sigma$. Together they describe a Gaussian distribution. In one coordinate we write $N(\mu, \sigma^2)$: the first argument is the mean, and the second argument is the variance. In our two-dimensional version, each INPUT image gets its own little Gaussian cloud in the latent plane.
+
+Think of a die. If I tell you its outcomes and their probabilities, I have specified a distribution, even before we roll it. A Gaussian is another kind of distribution: its mean says where its center is, and its standard deviation says how spread out it is. A neural network can only return numbers. We decide ahead of time to interpret two groups of returned numbers as the Gaussian’s mean and spread, then draw a latent point from that distribution.
+
+The mean and spread belong to the particular INPUT image being encoded. They are not automatically the same for every digit, and they are not the prior. The encoder’s cloud for a handwritten zero can be centered in a different place from the cloud for a handwritten one. The shared prior, which we will get to shortly, is $N(0, I)$.
+
+In practice, the network often returns $\log \sigma^2$, the log of the variance, rather than the variance itself. A network output can be negative, while a variance cannot. Any real number is allowed as a log variance; exponentiating it gives a positive variance, and taking its square root gives $\sigma$. The encoder usually has one shared stack of layers and then two output heads: one head predicts the means, and the other predicts the log variances. Same INPUT image, shared features, two sets of distribution parameters.
+
+Now the encoder describes a cloud of possible $z$ values instead of a single dot. Training samples from that cloud and sends the sampled $z$ through the decoder. Every sampled $z$ from the cloud for this INPUT image is trained against the same reconstruction target: the OUTPUT image should match that INPUT image. The samples are not required to produce pixel-for-pixel identical outputs, but they should stay in a region where the decoder can produce the right digit. That pressure teaches the decoder about neighborhoods, not just isolated dots.
+
+Move the sliders and collect samples. The cross is $\mu$, the ellipses show one and two standard deviations, and each dot is one sampled $z$.
+
+<CloudSampler />
+
+## Which is which: INPUT image and OUTPUT image?
+
+<Callout title="Keep the direction straight">
 Input image goes into the encoder. Output image comes out of the decoder. Training compares the two.
 </Callout>
 
-## 5. Keeping the clouds near the origin
+Here is the mental model I use. The VAE assumes that every real handwritten digit was produced by some hidden setting $z$. The decoder is like a chef: it receives the settings and cooks up an OUTPUT image. The encoder is like a food critic tasting that OUTPUT image and guessing which settings could have made it. In training, the critic gets an INPUT image and tries to infer a useful cloud of settings; the chef uses a sampled setting to recreate the digit.
 
-- A KL term pulls each cloud toward $\mathcal{N}(0, I)$.
-- This regularizes the latent space so nearby points remain useful for generation.
-- Generation becomes: sample $z \sim \mathcal{N}(0, I)$ and decode.
+The direction matters. $z$ is the cause in this little story, and the OUTPUT image is the effect. The decoder’s job is to describe which OUTPUT image is most likely to be produced by a given $z$. The encoder runs in the other direction as an inference tool: from an INPUT image, it estimates which latent settings could plausibly have produced it. It does not make the OUTPUT image by itself.
 
-## 6. Recap + what's next
+## Keeping the clouds together: the KL term
 
-- A VAE trades a single latent point for a distribution we can sample.
-- The next post: the ELBO and the reparameterization trick.
+So far, clouds alone do not promise a usable latent space. If reconstruction were the only pressure, the encoder could shrink each cloud’s $\sigma$ toward zero and place the means far apart. Almost every sampled $z$ would sit right on its INPUT image’s reconstruction dot. That is a comfortable solution for reconstruction, but it recreates the autoencoder problem: most randomly chosen points fall into holes.
+
+The VAE adds a second pressure, the KL term. For this post, the important idea is what it does, not its full derivation. It measures how different each INPUT image’s encoder distribution is from a shared prior, $N(0, I)$. Here $I$ is the identity covariance matrix, so this prior is centered at the origin with unit variance along each coordinate. The KL term penalizes clouds for drifting too far from that reference distribution or becoming too narrow.
+
+That pressure makes the clouds overlap and encourages them to fill a region around the origin. The encoder’s Gaussian for a particular INPUT image is still its own distribution; it is not secretly $N(0, I)$. Rather, the KL term asks each per-input distribution to stay reasonably close to the prior. The prior is our simple distribution for choosing latent settings at generation time.
+
+There is a tug-of-war. Reconstruction wants different handwritten digits to have distinct, sharp clouds so the decoder can tell a zero from a one. KL wants those clouds close to the same centered, unit-scale reference. Push too little on KL and gaps remain. Push too hard and the clouds pile together, so the decoder loses information about which digit it should make. The useful model balances both pressures.
+
+Drag β from one end to the other. This picture uses a deliberately crude interpolation to make the directions of the two pressures visible; its coverage and overlap numbers are toy measurements, not VAE training metrics.
+
+<KLTugOfWar />
+
+## Generating, finally
+
+Once training has made the encoder’s clouds roughly compatible with the prior, generation has a pleasingly short recipe. We throw away the encoder for this task, sample a latent point $z$ from $N(0, I)$, and pass $z$ to the decoder. The decoder then produces an OUTPUT image of a handwritten digit. We do not feed a randomly sampled $z$ into the encoder, and we do not need an INPUT image to start the generation step.
+
+Why should this work? Because the KL term trained the decoder on latent points drawn from per-input clouds that were nudged toward the same prior we now sample from. Without that nudge, a random prior point could land in an untrained hole. With it, the prior is a reasonable map of where useful latent settings tend to live. “Reasonable” does not mean every draw is a perfect digit, but it makes sampling a meaningful operation rather than a blind guess.
+
+Try the VAE mode and move through the spaces between the prototypes. Then press Random z a few times in each mode. The VAE version usually lands in a region covered by several broad clouds, so it can blend their toy digit patterns. Real VAEs also commonly produce softer, blurrier OUTPUT images than GANs; a smooth latent route does not promise razor-sharp strokes.
+
+<LatentExplorer mode="vae" />
+
+## One snag: gradients and random samples
+
+There is one training detail hiding in the phrase “sample a latent point.” If the network produces $\mu$ and $\sigma$, then we draw randomness and use it to get $z$. A direct random draw sits between the network outputs and the decoder, and ordinary backpropagation does not know how to assign a gradient through the act of drawing.
+
+The reparameterization trick moves the randomness into a separate variable: draw $\epsilon \sim N(0, I)$, then compute $z = \mu + \sigma \odot \epsilon$. Here $\epsilon$ is standard normal noise, and $\odot$ means coordinate-by-coordinate multiplication. Now $z$ is a differentiable calculation using the encoder’s ordinary outputs, while the randomness lives in $\epsilon$. That is the preview; part 2 will derive the trick properly and build the ELBO, the loss that puts reconstruction and the KL pressure together.
+
+## The short version
+
+- A plain autoencoder maps an INPUT image to one point, so its decoder may not know what to do in the gaps.
+- A VAE maps each INPUT image to a Gaussian cloud described by $\mu$ and $\sigma$, then trains the decoder on samples from that cloud.
+- The KL term pulls each per-input cloud toward the prior $N(0, I)$, without making those two distributions identical by definition.
+- To generate an OUTPUT image, sample $z$ from the prior and decode it. The encoder is not part of that generation step.
+- The reparameterization trick makes sampling compatible with backpropagation; we will work through the details next.
+
+Next: **VAEs, part 2: the ELBO and why this loss is the right one**
