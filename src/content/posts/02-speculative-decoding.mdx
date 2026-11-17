@@ -1,0 +1,53 @@
+---
+title: "Speculative decoding: let the intern guess"
+description: "A fast little draft model gets to guess a few words, while the big model checks its work."
+date: 2026-11-17
+series: "LLM systems"
+order: 1
+tags: ["LLMs", "inference", "speculative decoding"]
+draft: true
+---
+
+import ConceptAnimation from '../../components/ConceptAnimation.astro';
+
+## Waiting for one word at a time
+
+An autoregressive language model writes like a very thoughtful person with one hand tied up: it predicts one token, adds that token to the context, then predicts the next. The big model may be excellent at this job, but asking it to come back for every single word can make generation feel a bit like a slow-moving checkout line.
+
+Speculative decoding asks a smaller, speedier model to help. The small model drafts a few likely next tokens; the big model checks that draft in one go. If the draft is good, we get several tokens’ worth of progress for roughly one big-model visit. If it isn’t, we keep the valid part and let the big model take over where the guess went wobbly.
+
+<ConceptAnimation kind="speculative" />
+
+## The intern and the editor
+
+Imagine you’re writing a story with a sharp editor. The editor is brilliant but takes a moment to inspect each sentence. So you ask an intern to sketch the next few words. The intern is fast, and often right about “the sleepy cat sat…” The editor can then review that whole stretch together instead of stopping after every word.
+
+That’s the basic trade:
+
+1. The draft model proposes a short run of tokens.
+2. The target model evaluates those proposals together, using its usual next-token predictions.
+3. We keep the accepted part. At the first disagreement, the target supplies the correction, and drafting continues from there.
+
+The target isn’t asked to rubber-stamp the intern. It remains in charge of the answer.
+
+## “Accepted” depends on how we’re decoding
+
+With greedy decoding, the check is easy to picture: accept a draft token when it matches the target model’s own next-token choice. If one doesn’t match, use the target’s choice instead; later draft tokens depended on the rejected one, so they’re tossed out.
+
+With sampling, just keeping exact matches would change the target model’s output distribution. Speculative sampling uses an acceptance rule and a correction step so the resulting samples still follow the target model’s distribution. The bookkeeping is more careful than the intern metaphor, but the promise is lovely: speed up the work without quietly swapping in a different storyteller.
+
+## When does this help?
+
+It helps when the small model can make useful guesses and the target model can verify a batch more cheaply than generating the same tokens one by one. The two models need to agree often enough for the extra draft work to pay off. If they disagree constantly—or drafting itself is expensive—the intern is mostly making the editor more paperwork.
+
+So speculative decoding isn’t magic, and it doesn’t make the target model smarter. It rearranges the work: guess cheaply, verify efficiently, and keep the target model’s behavior.
+
+## The short version
+
+- A small draft model proposes several next tokens.
+- The target model checks the proposed run in parallel.
+- Accepted tokens save sequential target-model steps; rejected guesses are corrected.
+- Sampling needs a correction rule to preserve the target distribution.
+- It’s most useful when drafting and verification are cheaper than ordinary one-token-at-a-time generation.
+
+The intern may guess. The editor still signs the story.

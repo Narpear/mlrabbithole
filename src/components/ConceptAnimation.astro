@@ -1,0 +1,427 @@
+---
+interface Props {
+  kind: 'speculative' | 'kv-cache' | 'attention';
+}
+
+const { kind } = Astro.props;
+---
+
+<figure class={`concept-demo concept-demo--${kind}`}>
+  {kind === 'speculative' && (
+    <div class="spec-scene">
+      <div class="spec-row">
+        <span class="spec-label">Draft model (the eager intern)</span>
+        <div class="spec-tokens" aria-label="Draft tokens: the, sleepy, cat">
+          <span>the</span><span>sleepy</span><span>cat</span>
+        </div>
+      </div>
+      <div class="spec-check">
+        <span class="spec-scan" aria-hidden="true"></span>
+        <span>Big model checks the whole batch</span>
+      </div>
+      <div class="spec-row">
+        <span class="spec-label">Target model (the editor)</span>
+        <div class="spec-tokens spec-tokens--checked" aria-label="The target accepts the and sleepy, then corrects cat">
+          <span>✓ the</span><span>✓ sleepy</span><span class="spec-reject">↺ cat → fox</span>
+        </div>
+      </div>
+      <p class="spec-note">Two guesses survive. One gets a very polite rewrite.</p>
+    </div>
+  )}
+
+  {kind === 'kv-cache' && (
+    <div class="cache-scene">
+      <div class="cache-query">
+        <span class="cache-label">New token arrives</span>
+        <span class="cache-token">“fox”</span>
+        <span class="cache-arrow" aria-hidden="true">↓</span>
+        <span class="cache-label">Its query checks the saved notes</span>
+      </div>
+      <div class="cache-shelf" aria-label="Key and value notes saved for earlier tokens">
+        <span class="cache-heading">Earlier token</span><span class="cache-heading">Key</span><span class="cache-heading">Value</span>
+        <span>the</span><i></i><i></i>
+        <span>quick</span><i></i><i></i>
+        <span>brown</span><i></i><i></i>
+        <span>lazy</span><i></i><i></i>
+        <span class="cache-new">fox</span><i class="cache-new"></i><i class="cache-new"></i>
+      </div>
+      <p class="cache-note">Keep the notes. No re-reading the whole book every time.</p>
+    </div>
+  )}
+
+  {kind === 'attention' && (
+    <div class="attention-scene">
+      <section class="attention-card">
+        <h3>FlashAttention</h3>
+        <p>One GPU, tidy tiles</p>
+        <div class="flash-grid" aria-hidden="true">
+          {Array.from({ length: 12 }, (_, index) => <i style={`--tile: ${index}`}></i>)}
+        </div>
+        <span class="attention-caption">Less pantry-running</span>
+      </section>
+      <section class="attention-card">
+        <h3>BPT</h3>
+        <p>Blocks, efficiently batched</p>
+        <div class="bpt-blocks" aria-hidden="true">
+          <i><b>attention</b><b>feed-forward</b></i>
+          <i><b>attention</b><b>feed-forward</b></i>
+          <i><b>attention</b><b>feed-forward</b></i>
+        </div>
+        <span class="attention-caption">Smaller counter, more recipes</span>
+      </section>
+      <section class="attention-card">
+        <h3>Ring Attention</h3>
+        <p>Many GPUs, passing blocks</p>
+        <div class="ring-scene" aria-hidden="true">
+          <div class="ring-orbit"></div>
+          <i class="ring-node ring-node--one">GPU 1</i>
+          <i class="ring-node ring-node--two">GPU 2</i>
+          <i class="ring-node ring-node--three">GPU 3</i>
+          <i class="ring-node ring-node--four">GPU 4</i>
+        </div>
+        <span class="attention-caption">The context goes around</span>
+      </section>
+    </div>
+  )}
+  <figcaption>
+    {kind === 'speculative' && 'Speculative decoding: draft a few tokens, then verify them together.'}
+    {kind === 'kv-cache' && 'The KV cache: save each token’s attention notes for the next step.'}
+    {kind === 'attention' && 'Three memory strategies, each tidying a different part of the kitchen.'}
+  </figcaption>
+</figure>
+
+<style>
+  .concept-demo {
+    margin: 2rem 0;
+    padding: clamp(1rem, 3vw, 1.4rem);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface);
+    font-family: var(--font-ui);
+  }
+
+  .concept-demo figcaption {
+    margin-top: 1rem;
+    color: var(--muted);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  .spec-scene,
+  .cache-scene {
+    display: grid;
+    gap: 1rem;
+    max-width: 34rem;
+    margin-inline: auto;
+  }
+
+  .spec-row {
+    display: grid;
+    grid-template-columns: minmax(8.5rem, 0.8fr) minmax(0, 1.5fr);
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  .spec-label,
+  .cache-label {
+    color: var(--muted);
+    font-size: 0.72rem;
+    line-height: 1.4;
+  }
+
+  .spec-tokens {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .spec-tokens span {
+    padding: 0.4rem 0.55rem;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    background: var(--paper);
+    color: var(--ink);
+    font: 0.75rem var(--font-mono);
+    animation: token-pop 2.4s ease-in-out infinite;
+    animation-delay: calc(var(--token, 0) * 180ms);
+  }
+
+  .spec-tokens span:nth-child(2) { --token: 1; }
+  .spec-tokens span:nth-child(3) { --token: 2; }
+
+  .spec-tokens--checked span { color: var(--accent); }
+  .spec-tokens--checked .spec-reject { color: var(--amber); }
+
+  .spec-check {
+    position: relative;
+    overflow: hidden;
+    padding: 0.55rem;
+    border-block: 1px dashed var(--line);
+    color: var(--muted);
+    font-size: 0.72rem;
+    text-align: center;
+  }
+
+  .spec-scan {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 18%;
+    background: var(--accent-soft);
+    opacity: 0.7;
+    animation: scan 3.2s ease-in-out infinite;
+  }
+
+  .spec-check > span:last-child { position: relative; }
+
+  .spec-note,
+  .cache-note {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.72rem;
+    text-align: center;
+  }
+
+  .cache-query {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  .cache-token {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--accent);
+    border-radius: 5px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font: 0.75rem var(--font-mono);
+    animation: token-pop 2s ease-in-out infinite;
+  }
+
+  .cache-arrow {
+    color: var(--accent);
+    animation: arrow-bob 1.4s ease-in-out infinite;
+  }
+
+  .cache-shelf {
+    display: grid;
+    grid-template-columns: 1fr 0.65fr 0.65fr;
+    gap: 0.35rem 0.65rem;
+    align-items: center;
+    width: min(100%, 22rem);
+    margin-inline: auto;
+    padding: 0.8rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--paper);
+    color: var(--ink);
+    font: 0.7rem var(--font-mono);
+  }
+
+  .cache-heading {
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--line);
+    color: var(--muted);
+    font: 0.63rem var(--font-ui);
+  }
+
+  .cache-shelf i {
+    display: block;
+    height: 0.55rem;
+    border-radius: 3px;
+    background: var(--accent-soft);
+    animation: note-glow 2.8s ease-in-out infinite;
+  }
+
+  .cache-shelf i:nth-of-type(2) { animation-delay: 350ms; }
+  .cache-shelf i:nth-of-type(3) { animation-delay: 700ms; }
+  .cache-shelf i:nth-of-type(4) { animation-delay: 1050ms; }
+  .cache-shelf i:nth-of-type(5) { animation-delay: 1400ms; }
+  .cache-new { color: var(--accent); }
+
+  .attention-scene {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+  }
+
+  .attention-card {
+    min-width: 0;
+    padding: 0.75rem 0.55rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    text-align: center;
+  }
+
+  .attention-card h3 {
+    margin: 0;
+    color: var(--accent);
+    font: 600 0.8rem var(--font-ui);
+  }
+
+  .attention-card p,
+  .attention-caption {
+    display: block;
+    margin: 0.35rem 0 0;
+    color: var(--muted);
+    font-size: 0.63rem;
+    line-height: 1.4;
+  }
+
+  .flash-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 3px;
+    width: min(100%, 7.5rem);
+    aspect-ratio: 1.2;
+    margin: 0.8rem auto;
+  }
+
+  .flash-grid i {
+    border-radius: 2px;
+    background: var(--accent-soft);
+    animation: tile-light 3.6s ease-in-out infinite;
+    animation-delay: calc(var(--tile) * 100ms);
+  }
+
+  .bpt-blocks {
+    display: grid;
+    gap: 0.3rem;
+    width: min(100%, 8rem);
+    margin: 0.8rem auto;
+  }
+
+  .bpt-blocks i {
+    display: flex;
+    justify-content: center;
+    gap: 3px;
+    font-style: normal;
+  }
+
+  .bpt-blocks b {
+    overflow: hidden;
+    padding: 0.3rem 0.2rem;
+    border-radius: 3px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font: 0.48rem var(--font-mono);
+    animation: block-light 2.8s ease-in-out infinite;
+  }
+
+  .bpt-blocks i:nth-child(2) b { animation-delay: 450ms; }
+  .bpt-blocks i:nth-child(3) b { animation-delay: 900ms; }
+
+  .ring-scene {
+    position: relative;
+    width: min(100%, 7.5rem);
+    aspect-ratio: 1;
+    margin: 0.35rem auto;
+  }
+
+  .ring-orbit {
+    position: absolute;
+    inset: 24%;
+    border: 1px dashed var(--line);
+    border-radius: 50%;
+    animation: orbit 3.2s linear infinite;
+  }
+
+  .ring-orbit::after {
+    position: absolute;
+    top: -0.24rem;
+    left: calc(50% - 0.22rem);
+    width: 0.44rem;
+    height: 0.44rem;
+    border-radius: 50%;
+    background: var(--accent);
+    content: '';
+  }
+
+  .ring-node {
+    position: absolute;
+    display: grid;
+    width: 2.2rem;
+    height: 1.25rem;
+    place-items: center;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--ink);
+    font: normal 0.5rem var(--font-mono);
+  }
+
+  .ring-node--one { top: 0; left: calc(50% - 1.1rem); }
+  .ring-node--two { top: calc(50% - 0.62rem); right: 0; }
+  .ring-node--three { bottom: 0; left: calc(50% - 1.1rem); }
+  .ring-node--four { top: calc(50% - 0.62rem); left: 0; }
+
+  @keyframes token-pop {
+    0%, 100% { transform: translateY(0); }
+    45% { transform: translateY(-3px); }
+  }
+
+  @keyframes scan {
+    0% { transform: translateX(-120%); }
+    70%, 100% { transform: translateX(560%); }
+  }
+
+  @keyframes arrow-bob {
+    0%, 100% { transform: translateY(-2px); }
+    50% { transform: translateY(2px); }
+  }
+
+  @keyframes note-glow {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; background: var(--accent); }
+  }
+
+  @keyframes tile-light {
+    0%, 100% { background: var(--accent-soft); }
+    25% { background: var(--accent); }
+  }
+
+  @keyframes block-light {
+    0%, 100% { background: var(--accent-soft); color: var(--accent); }
+    50% { background: var(--accent); color: var(--surface); }
+  }
+
+  @keyframes orbit {
+    to { transform: rotate(360deg); }
+  }
+
+  @media (max-width: 480px) {
+    .spec-row { grid-template-columns: 1fr; gap: 0.35rem; }
+    .attention-scene { grid-template-columns: 1fr; }
+    .attention-card {
+      display: grid;
+      grid-template-columns: minmax(6rem, 1fr) minmax(5rem, 0.9fr) minmax(4rem, 1fr);
+      align-items: center;
+      gap: 0.25rem;
+      text-align: left;
+    }
+    .attention-card h3 { font-size: 0.72rem; }
+    .attention-card p { margin: 0; }
+    .attention-caption { margin: 0; text-align: right; }
+    .flash-grid,
+    .bpt-blocks { margin: 0; }
+    .ring-scene { width: 4.5rem; margin: 0; }
+    .ring-node { width: 1.6rem; height: 0.9rem; font-size: 0.4rem; }
+    .ring-node--one,
+    .ring-node--three { left: calc(50% - 0.8rem); }
+    .ring-node--two,
+    .ring-node--four { top: calc(50% - 0.45rem); }
+    .ring-orbit::after { transform-origin: 50% 1.5rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .concept-demo *,
+    .concept-demo *::before,
+    .concept-demo *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+    }
+  }
+</style>

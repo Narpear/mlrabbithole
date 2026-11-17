@@ -1,0 +1,49 @@
+---
+title: "The KV cache: your model's very full notebook"
+description: "Why a language model keeps keys and values around, and why that helpful memory takes up space."
+date: 2026-11-17
+series: "LLM systems"
+order: 2
+tags: ["LLMs", "inference", "KV cache"]
+draft: true
+---
+
+import ConceptAnimation from '../../components/ConceptAnimation.astro';
+
+## The model has already read that bit
+
+When a language model generates a reply, it works through the context one token at a time. At each step, attention lets the new token look back at earlier tokens and decide which bits matter. Without a shortcut, the model would keep redoing a lot of that earlier attention work. Imagine rereading an entire novel every time you wanted to add one word to the last page. Very thorough; not a fun use of an afternoon.
+
+The **key-value cache**, usually shortened to **KV cache**, is the model’s set of saved notes from previous tokens. Instead of recomputing the old attention keys and values at every step, the model saves them and reuses them when the next token arrives.
+
+<ConceptAnimation kind="kv-cache" />
+
+## Keys and values, not tiny dictionary entries
+
+In an attention layer, each token is transformed into a **key** and a **value** (and a new token also produces a **query**). The query is compared with earlier keys to work out which earlier tokens are relevant. The corresponding values contribute information to the new representation.
+
+The cache stores those per-layer key and value tensors for tokens the model has already processed. It doesn’t store a neat English summary, and it isn’t a separate long-term memory that understands the conversation. It’s more like keeping every recipe card on the counter so the cook can quickly find the ingredients needed for the next step.
+
+On the next generation step, the new query can attend to the saved keys and values plus the new token’s own key and value. The model avoids rebuilding the old notes, but it still needs to read and use them.
+
+## A helpful notebook with a growing page count
+
+The cache grows as the context grows. A rough way to see the storage pressure is:
+
+$$
+\text{cache size} \propto 2 \times \text{layers} \times \text{batch size} \times \text{tokens} \times \text{KV heads} \times \text{head dimension} \times \text{bytes per value}.
+$$
+
+The factor of two is for keys and values. Real implementations have extra details, but the shape of the trade-off is clear: more layers, more simultaneous conversations, or longer context means more saved notes. Long prompts and long generations can make this notebook surprisingly enormous.
+
+There are ways to manage the bill. Grouped-query attention can use fewer KV heads than query heads. Some systems store the cache at lower precision, move parts of it between memory and storage, or limit how much past context is retained. Each option has its own trade-offs; the right choice depends on the model and workload.
+
+## The short version
+
+- Attention creates keys and values for each token at each layer.
+- The KV cache keeps previous tokens’ keys and values for reuse during generation.
+- Reuse saves repeated computation, especially as the conversation grows.
+- The saved tensors take memory, so long contexts and many concurrent requests can get expensive.
+- It’s a speed-versus-memory trade: the model saves notes, but the notes still need shelf space.
+
+The model doesn’t have to reread the whole book. It does, however, need a rather roomy desk.

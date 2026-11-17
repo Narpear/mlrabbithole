@@ -1,0 +1,66 @@
+---
+title: "FlashAttention, BPT, and Ring Attention: three ways to tidy the kitchen"
+description: "A friendly tour of three different memory strategies for attention and long-context transformers."
+date: 2026-11-17
+series: "LLM systems"
+order: 3
+tags: ["LLMs", "attention", "FlashAttention", "BPT", "Ring Attention"]
+draft: true
+---
+
+import ConceptAnimation from '../../components/ConceptAnimation.astro';
+
+## One kitchen, three kinds of mess
+
+Attention can be hungry for memory. As sequences get longer, there’s more context to process and more intermediate information to juggle. **FlashAttention**, **Blockwise Parallel Transformer (BPT)**, and **Ring Attention** all help with the “how do we fit this?” problem—but they work at different levels. They are not three interchangeable names for the same trick.
+
+Think of a very busy kitchen:
+
+- FlashAttention rearranges the cooking so the chef makes fewer trips to the pantry.
+- BPT breaks the meal into manageable blocks and combines steps to keep less on the counter.
+- Ring Attention gives the work to several kitchens that pass ingredient bins around.
+
+<ConceptAnimation kind="attention" />
+
+## FlashAttention: fewer trips to the pantry
+
+FlashAttention is an **exact attention algorithm designed around GPU memory movement**. Rather than materializing the full attention matrix in high-bandwidth memory, it works through tiles of the computation and keeps useful intermediate results in fast on-chip memory. That cuts down on expensive trips between memory and compute while still producing the exact attention result, up to ordinary floating-point rounding.
+
+The kitchen version: keep a small prep area organized, bring ingredients over in batches, finish a tile, and move on. It’s a clever way to make one GPU’s memory hierarchy work harder—not a way to split a long sequence across a ring of GPUs.
+
+## BPT: cook in blocks, combine the steps
+
+**Blockwise Parallel Transformer** is a memory-efficient approach to training long-context transformers. It computes attention block by block and fuses the attention and feed-forward work in a way that reduces the memory needed for intermediate activations.
+
+Picture preparing a huge dinner by handling one tray at a time, then combining kitchen steps so half-finished trays don’t pile up everywhere. The goal is to fit longer sequences into a limited memory budget. BPT is a broader transformer-training approach, not simply another name for FlashAttention’s tiled attention kernel.
+
+## Ring Attention: pass the bins around
+
+Ring Attention targets **distributed long-context attention**. Different devices hold different blocks of the sequence. Each device works with its local queries while key-value blocks circulate from device to device around a ring. Computation can overlap with that communication, helping the group process a context that would be awkward to fit on one device.
+
+This is the catering version: several kitchens each handle a part of the order, then pass ingredient bins around the loop. It can scale the sequence across devices, but now coordination and communication matter too. A ring of GPUs is not automatically faster if passing the bins becomes the bottleneck.
+
+## So, which one do I reach for?
+
+| Technique | Main idea | The kitchen job |
+| --- | --- | --- |
+| FlashAttention | Tile exact attention to reduce GPU memory traffic | Make fewer pantry trips |
+| BPT | Process attention and feed-forward computation blockwise to lower training memory | Keep each prep batch manageable |
+| Ring Attention | Distribute sequence blocks across devices and circulate key-value blocks | Share the order across kitchens |
+
+These approaches solve related but different bottlenecks: **memory traffic within a GPU**, **activation memory during transformer training**, and **sequence distribution across multiple devices**. Depending on the system, some ideas may fit together; first it helps to know which kitchen is actually running out of counter space.
+
+## The short version
+
+- FlashAttention makes exact attention more memory-efficient by reducing data movement.
+- BPT uses blockwise computation and fusion to reduce memory for long-context transformer training.
+- Ring Attention distributes long sequences across devices and passes key-value blocks around a ring.
+- Ask whether the pinch point is GPU memory traffic, training activations, or multi-device context size.
+
+All three are memory tricks. They just have very different ideas about who gets the chopping board.
+
+## Further reading
+
+- [FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness](https://arxiv.org/abs/2205.14135)
+- [Blockwise Parallel Transformer for Large Context Models](https://arxiv.org/abs/2305.19370)
+- [Ring Attention with Blockwise Transformers for Near-Infinite Context](https://arxiv.org/abs/2310.01889)
